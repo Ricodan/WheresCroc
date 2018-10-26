@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1539169238434.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "688764780",
+    "id" : "7A4B47C8",
+    "lastKnownWriteTime" : 1540558885,
+    "last_content_update" : 1540558885115,
+    "path" : "~/AI/WheresCroc/WheresCroc.R",
+    "project_path" : "WheresCroc.R",
+    "properties" : {
+        "cursorPosition" : "31,2",
+        "scrollLine" : "18",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 1,
+    "source_on_save" : true,
+    "source_window" : "",
+    "type" : "r_source"
+}

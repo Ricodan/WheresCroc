@@ -1,0 +1,259 @@
+library(WheresCroc)
+
+
+runCroc <- function(seed) {
+  set.seed(seed)
+  runWheresCroc(myFunction, showCroc = T, pause = 2)
+}
+
+myFunction=function(moveInfo,readings,positions,edges,probs,verbose = F, stats = F) {
+  
+  if(any(na.omit(positions[1:2]) < 0)) {
+    if(verbose)
+      cat("\nCroc ate a tourist!\n")
+    FPrev = matrix(rep(0,40), ncol = 40)
+    FPrev[positions[which(positions[1:2] < 0)]] = 1
+  }
+
+  
+  if(verbose) {
+    e <- globalenv()
+    e$moveInfo <- moveInfo
+    e$readings <- readings
+    e$positions <- positions
+    e$edges <- edges
+    e$probs <- probs
+  }
+  # If no transition matrix exists in memory, then calculate it.
+  if(is.null(moveInfo$mem$transitionMatrix)) {
+    
+    transitionMatrix = matrix(nrow = 40, ncol = 40)
+    for(i in 1:40) {
+      neighbors = getNeighbors(i, edges)
+      transitionMatrix[i, ] = 0
+      transitionMatrix[i, neighbors] = 1/(length(neighbors) + 1)
+    }
+    if(verbose)
+      e$transitionMatrix <- transitionMatrix
+    moveInfo$mem$transitionMatrix <- transitionMatrix
+  } else {
+    transitionMatrix <- moveInfo$mem$transitionMatrix
+  }
+  
+  
+  
+  salinity = apply(probs$salinity, 1, function(x) dnorm(readings[1], x[1], x[2]))
+  phosphate = apply(probs$phosphate, 1, function(x) dnorm(readings[2], x[1], x[2]))
+  nitrogen = apply(probs$nitrogen, 1, function(x) dnorm(readings[3], x[1], x[2]))
+  
+  readingProbMatrix = cbind(salinity, phosphate, nitrogen)
+  if(verbose)
+    e$readingProbMatrix <- readingProbMatrix
+  
+  readingProbVector = apply(readingProbMatrix, 1, prod)
+  if(verbose)
+    e$readingProbVector <- readingProbVector
+  
+  OMatrix = diag(readingProbVector)
+  
+  
+  if(is.null(moveInfo$mem$FPrev) || moveInfo$mem$status == 1) {
+    moveInfo$mem$status = 0
+    FPrev = matrix(rep(1/40,40), ncol = 40)
+  } else {
+    FPrev = moveInfo$mem$FPrev
+  }
+  
+  FNew = FPrev %*% transitionMatrix %*% OMatrix
+  if(verbose)
+    e$FNew <- FNew
+  # FNewNorm = sapply(FNew, function(x) { x/sum(FNew) })
+  # FNewNorm = FNewNorm/sum(FNew)
+  moveInfo$mem$FPrev = FNew/sum(FNew)
+  
+  guess = order(FNew, decreasing = T)[1]
+  guess2 = order(FNew, decreasing = T)[2]
+  guessdiff = FNew[guess2] - FNew[guess]
+  # guess = which(FNew == max(FNew))
+  if(verbose)
+    cat("I guess Croc is at waterhole", order(FNew, decreasing = T)[1], ",",guess2, ",", guessdiff, "\n")
+  
+  
+  
+  if(guess == positions[3]) {
+    if(verbose)
+      cat("I'm at the same position! Looking!\n")
+    moveInfo$moves = c(0, 0)
+    FNew[guess] = 0
+    moveInfo$mem$FPrev = FNew/sum(FNew)
+  } else {
+    if(verbose)
+      cat("I'm at", positions[3], " Finding the way there!\n")
+    path = bfs(positions[3], guess, edges)
+    if(verbose)
+      cat("This is a path:", as.numeric(path), "\n")
+    if(path[[2]] == guess) {
+      moveInfo$moves = c(path[[2]], 0)
+      FNew[guess] = 0
+      moveInfo$mem$FPrev = FNew/sum(FNew)
+    } else {
+      moveInfo$moves = as.numeric(path[2:3])
+    }
+  }
+  if(verbose)
+    cat("I'm making this move: ", moveInfo$moves, "\n")
+  
+  if(verbose)
+    if(readline(prompt="Press [enter] to continue") == "q") 
+      stop()
+  
+  if(stats) {
+    plotInfo = recordPlot()
+    crocX = plotInfo[[1]][[13]][[2]][[2]]$x
+    crocY = plotInfo[[1]][[13]][[2]][[2]]$y
+    truePos = which(apply(getPoints(), 1, function(x) identical(x, c(crocX,crocY))))
+    dist = bfs(guess, truePos, edges)
+    if(is.null(dist)) {
+      dist = 0
+    } else {
+      dist = length(dist)-1
+    }
+    cat(guess,",",truePos,",", dist, "\n")
+  }
+  
+  return(moveInfo)
+}
+
+getNeighbors <- function(position, edges) {
+  c(edges[which(edges[,1]==position),2],edges[which(edges[,2]==position),1])
+}
+
+
+bfs <- function(start, dest, edges, verbose = F) {
+  if(start ==dest) {
+    return(NULL)
+  }
+  nodes = rep( list(list(state=0, parent=0)), 40 ) 
+  
+  nodes[[start]]$state = 1
+  nodes[[start]]$parent = start
+  nodes[[dest]]$state = -1
+  
+  # To matrix: 
+  # t(do.call("cbind",nodes))
+  
+  frontier = list(start)
+  found = F
+  while(!found) {
+    currentNode = frontier[[1]]
+    frontier[[1]] <- NULL
+    if(verbose)
+      cat("Investigating neighbors to node", currentNode, "\n")
+    neighbors = getNeighbors(currentNode, edges)
+    if(verbose)
+      cat("It has the neighbors:", neighbors, "\n")
+    index = -1
+    dropList = list()
+    for(i in neighbors) {
+      if(nodes[[i]]$state == 0) {
+        # Unvisited node. 
+        # Set to visited, and set currentNode to parent
+        nodes[[i]]$state = 1
+        nodes[[i]]$parent = currentNode
+      } else if(nodes[[i]]$state == 1) {
+        # Already visited. Remove from neighbors.
+        if(verbose)
+          cat("Not adding", i, "at index", index, "\n")
+        dropList[[length(dropList)+1]] <- index
+        
+      } else if(nodes[[i]]$state == -1) {
+        # We found a path!
+        found = T
+        nodes[[i]]$parent = currentNode
+        return(backtrack(nodes, dest))
+      }
+      index <- index - 1
+    }
+    if(length(dropList) > 0)
+      frontier = c(frontier, neighbors[dropList[[1]]])
+    else 
+      frontier = c(frontier, neighbors)
+    if(verbose) {
+      cat("Current frontier: ", as.numeric(frontier))
+      if(readline(prompt="Press [enter] to continue") == "q") 
+        stop()
+    }
+  }
+  # Something failed. 
+  print("Something went very wrong with your BFS algorithm... :(")
+  return(-1) 
+}
+
+backtrack <- function(nodes, dest, verbose = F) {
+  if(verbose) {
+    e <- globalenv()
+    e$nodes <- nodes  
+  }
+  
+  path = list(dest)
+  prev = dest
+  loop = T
+  while(loop) {
+    if(nodes[[prev]]$parent == prev) {
+      return(rev(path))
+    } 
+    path[[length(path)+1]] <- nodes[[prev]]$parent
+    prev = nodes[[prev]]$parent
+    if(verbose) {
+      cat("From ", path[[length(path)-1]], "->", path[[length(path)]],"\n")
+      cat("Current path is", as.numeric(path), "\n")
+      if(readline(prompt="Press [enter] to continue") == "q") 
+        stop()  
+    }
+    
+  }
+}
+
+getPoints=function() {
+  points=matrix(c(1,1),ncol=2)
+  points=rbind(points,c(1,7))
+  points=rbind(points,c(1,17))
+  points=rbind(points,c(2,3))
+  points=rbind(points,c(2,12))
+  points=rbind(points,c(3,2))
+  points=rbind(points,c(3,19))
+  points=rbind(points,c(4,7))
+  points=rbind(points,c(4,11))
+  points=rbind(points,c(5,5))
+  points=rbind(points,c(5,15))
+  points=rbind(points,c(6,1))
+  points=rbind(points,c(6,20))
+  points=rbind(points,c(7,6))
+  points=rbind(points,c(7,11))
+  points=rbind(points,c(8,2))
+  points=rbind(points,c(8,14))
+  points=rbind(points,c(8,18))
+  points=rbind(points,c(9,6))
+  points=rbind(points,c(10,10))
+  points=rbind(points,c(10,18))
+  points=rbind(points,c(11,1))
+  points=rbind(points,c(11,12))
+  points=rbind(points,c(12,6))
+  points=rbind(points,c(12,12))
+  points=rbind(points,c(13,16))
+  points=rbind(points,c(14,4))
+  points=rbind(points,c(14,12))
+  points=rbind(points,c(14,20))
+  points=rbind(points,c(15,3))
+  points=rbind(points,c(15,8))
+  points=rbind(points,c(15,17))
+  points=rbind(points,c(16,14))
+  points=rbind(points,c(17,3))
+  points=rbind(points,c(17,18))
+  points=rbind(points,c(18,10))
+  points=rbind(points,c(19,13))
+  points=rbind(points,c(20,2))
+  points=rbind(points,c(20,6))
+  points=rbind(points,c(20,19))
+  return (points)
+}

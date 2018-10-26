@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1539334559806.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "EAAA5EDC",
+    "lastKnownWriteTime" : 1539440852,
+    "last_content_update" : 1539440852551,
+    "path" : "~/Downloads/WheresCroc_1.2.1/WheresCroc/R/WheresCroc.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "355,50",
+        "scrollLine" : "0"
+    },
+    "relative_order" : 2,
+    "source_on_save" : true,
+    "source_window" : "",
+    "type" : "r_source"
+}
