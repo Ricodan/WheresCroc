@@ -2,6 +2,95 @@ library(WheresCroc)
 
 #F_t = F_(t-1) * T * O_t
 
+#######################################################################################################################
+#READINGS: A vector giving the salinity, phosphate and nitrogen reading from Croc sensors at his current location. 
+#TOURISTS: A vector giving the positions of the two tourists (elements 1 and 2) and yourself (element 3). 
+#If a tourist has just been eaten by Croc that turn, the position will be multiplied by -1. If a tourist was eaten by Croc in a 
+#previous turn, then the position will be NA.
+#EDGES: is edges
+#MATRICES: contains the mean[1] and sd[2] of $salinity $phosphate and $nitrate
+myFunction <- function(movesAndMem, readings, touristsAndMe, edges, matrices){
+  #print(movesAndMem)
+  
+  #if tourist was eaten
+  if(any(na.omit(touristsAndMe[1:2]) <0 )){
+    cat("Tourist got eaten")
+    negNode = touristsAndMe[which(na.omit(touristsAndMe[1:2])<0) ]
+    negNode = negNode * -1
+    cat("Tourist got eaten at", negNode)
+    Fprev = matrix(0,ncol = 40)
+    Fprev[negNode]=1
+    
+    #multiply the number with -1 and set it at that index
+    
+  }
+  
+  #check if there's a movement vector stored
+  if(is.null(movesAndMem$mem$transMatrix)){
+    tmatrix <-transitionMatrix(1, edges)
+    movesAndMem$mem$transMatrix <-tmatrix
+  }else{
+      tmatrix <- movesAndMem$mem$transMatrix
+  }
+  
+  if(is.null(movesAndMem$mem$Fprev)||movesAndMem$status == 1){
+    movesAndMem$status <-0
+    Fprev <-matrix(1/40,ncol = 40)
+  }else{
+    Fprev <-movesAndMem$mem$Fprev
+  }
+  
+
+  
+  salinityColumn =  apply(matrices$salinity, 1, function(row) dnorm(readings[1],row[1], row[2]) )
+  phosphateColumn = apply(matrices$phosphate,1, function(row) dnorm(readings[2],row[1], row[2]) )
+  nitrogenColumn =   apply(matrices$nitrogen,  1, function(row) dnorm(readings[3],row[1], row[2]) )
+
+  probabilityColumn = cbind(salinityColumn,phosphateColumn,nitrogenColumn)
+  #print(probabilityColumn)
+  probabilityColumn = apply(probabilityColumn, 1, function(x) prod(x[1],x[2],x[3]))
+
+
+  #And here we get the vector with the probabilities at each node.
+  Fnew = Fprev %*% tmatrix * probabilityColumn
+  movesAndMem$mem$Fprev <-Fnew
+  cat("Fnew", Fnew, "\n")
+  #remember to add Fnew to movesAndMe$mem$Fprev
+  
+
+  probCrocLocation = which.max(Fnew)
+  print(probCrocLocation)
+  
+  routeToCroc=shortestPath(touristsAndMe[3],probCrocLocation,edges)
+  print(routeToCroc)
+  
+  #add the necessary things to control the movement. (remember to fix gitignore before continuing)
+  nextStep1 = routeToCroc[1]
+  nextStep2 = routeToCroc[2]
+
+  #add logic to either move or search the waterhole
+  #I'm just checking my own fucking location here.
+  if(probCrocLocation == touristsAndMe[3]){
+    movesAndMem$moves <-c(0,0)
+    cat("Check Waterhole", movesAndMem$moves, "\n")
+  }else{
+    movesAndMem$moves <-c(nextStep1,nextStep2)
+    cat("Moves", movesAndMem$moves, "\n")
+  }
+  
+  
+  
+  
+  
+  
+  
+  return(movesAndMem)
+}
+
+
+
+
+
 #the transiion matrix function
 transitionMatrix <-function (myPosition, edges){
   
@@ -21,58 +110,8 @@ transitionMatrix <-function (myPosition, edges){
 
 #traverse the edges matrix and get the nodes and all the edges that go from that node.
 getNeighbors <- function(position, edges) {
-     c(edges[which(edges[,1]==position),2],edges[which(edges[,2]==position),1])
+  c(edges[which(edges[,1]==position),2],edges[which(edges[,2]==position),1])
 }
-  
-
-#######################################################################################################################
-#READINGS: A vector giving the salinity, phosphate and nitrogen reading from Croc sensors at his current location. 
-#TOURISTS: A vector giving the positions of the two tourists (elements 1 and 2) and yourself (element 3). 
-#If a tourist has just been eaten by Croc that turn, the position will be multiplied by -1. If a tourist was eaten by Croc in a 
-#previous turn, then the position will be NA.
-#EDGES: is edges
-#MATRICES: contains the mean[1] and sd[2] of $salinity $phosphate and $nitrate
-myFunction <- function(movesAndMem, readings, touristsAndMe, edges, matrices){
-  tmatrix = transitionMatrix(1, edges)
- 
-  
- 
-  #Step 3: Create Omissions matrix
-  
-  Fprev = matrix(1/40,ncol = 40)
-  
-  #dnorm for each of the matrices, salinity and stuff like that
- 
-  #gotta fix this a little bit
-  salinityColumn =  apply(matrices$salinity, 1, function(row) dnorm(readings[1],row[1], row[2]) )
-  phosphateColumn = apply(matrices$phosphate,1, function(row) dnorm(readings[2],row[1], row[2]) )
-  nitrogenColumn =   apply(matrices$nitrogen,  1, function(row) dnorm(readings[3],row[1], row[2]) )
-
-  
-  probabilityColumn = cbind(salinityColumn,phosphateColumn,nitrogenColumn)
-  print(probabilityColumn)
-  #This is basically the omission vector? not sure tho
-  probabilityColumn = apply(probabilityColumn, 1, function(x) prod(x[1],x[2],x[3]))
-  #print(probabilityColumn)
-  
-  #probabilityColumn = apply(probabilityColumn, 1, prod)
-  #print(probabilityColumn2)
-  
-  
-  
-  #And here we get the vector with the probabilities at each node.
-  Fnew = Fprev %*% tmatrix * probabilityColumn
-  print(Fnew)
-  
-  #This gives the most likely location of the croc
-  probCrocLocation = which.max(Fnew)
-  print(probCrocLocation)
-  
-  routeToCroc=shortestPath(touristsAndMe[3],probCrocLocation,edges)
-  print(routeToCroc)
-  
-}
-
 
 appendSorted = function (newNode,frontier){
   # We add the new node to the frontier, sorted with respect to the total cost of the path
