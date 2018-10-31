@@ -11,18 +11,18 @@ library(WheresCroc)
 #MATRICES: contains the mean[1] and sd[2] of $salinity $phosphate and $nitrate
 myFunction <- function(movesAndMem, readings, touristsAndMe, edges, matrices){
   #print(movesAndMem)
+  print("New Turn")
   
   #if tourist was eaten
   if(any(na.omit(touristsAndMe[1:2]) <0 )){
     cat("Tourist got eaten")
     negNode = touristsAndMe[which(na.omit(touristsAndMe[1:2])<0) ]
+    print(negNode)
     negNode = negNode * -1
-    cat("Tourist got eaten at", negNode)
-    Fprev = matrix(0,ncol = 40)
+    cat("Tourist got eaten at", negNode, "\n")
+    Fprev <- matrix(0,ncol = 40)
     Fprev[negNode]=1
-    
-    #multiply the number with -1 and set it at that index
-    
+    print(Fprev)
   }
   
   #check if there's a movement vector stored
@@ -30,11 +30,11 @@ myFunction <- function(movesAndMem, readings, touristsAndMe, edges, matrices){
     tmatrix <-transitionMatrix(1, edges)
     movesAndMem$mem$transMatrix <-tmatrix
   }else{
-      tmatrix <- movesAndMem$mem$transMatrix
+    tmatrix <- movesAndMem$mem$transMatrix
   }
   
-  if(is.null(movesAndMem$mem$Fprev)||movesAndMem$status == 1){
-    movesAndMem$status <-0
+  if(is.null(movesAndMem$mem$Fprev)){
+    movesAndMem$status = 0
     Fprev <-matrix(1/40,ncol = 40)
   }else{
     Fprev <-movesAndMem$mem$Fprev
@@ -49,13 +49,15 @@ myFunction <- function(movesAndMem, readings, touristsAndMe, edges, matrices){
   probabilityColumn = cbind(salinityColumn,phosphateColumn,nitrogenColumn)
   #print(probabilityColumn)
   probabilityColumn = apply(probabilityColumn, 1, function(x) prod(x[1],x[2],x[3]))
-
+  Omatrix = diag(probabilityColumn)
 
   #And here we get the vector with the probabilities at each node.
-  Fnew = Fprev %*% tmatrix * probabilityColumn
-  movesAndMem$mem$Fprev <-Fnew
+  cat("Fprev", Fprev, "\n")
+  #previously had " * probabilityColumn" instead of %*% Omatrix
+  Fnew = Fprev %*% tmatrix %*% Omatrix
+  movesAndMem$mem$Fprev <-Fnew/sum(Fnew)
   cat("Fnew", Fnew, "\n")
-  #remember to add Fnew to movesAndMe$mem$Fprev
+ 
   
 
   probCrocLocation = which.max(Fnew)
@@ -73,6 +75,9 @@ myFunction <- function(movesAndMem, readings, touristsAndMe, edges, matrices){
   if(probCrocLocation == touristsAndMe[3]){
     movesAndMem$moves <-c(0,0)
     cat("Check Waterhole", movesAndMem$moves, "\n")
+  }else if(nextStep2 == probCrocLocation){
+    movesAndMem$moves <-c(nextStep1,0)
+    cat("Move to ", nextStep1, " and check waterhole\n")
   }else{
     movesAndMem$moves <-c(nextStep1,nextStep2)
     cat("Moves", movesAndMem$moves, "\n")
