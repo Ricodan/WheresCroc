@@ -9,91 +9,108 @@ library(WheresCroc)
 #previous turn, then the position will be NA.
 #EDGES: is edges
 #MATRICES: contains the mean[1] and sd[2] of $salinity $phosphate and $nitrate
-myFunction <- function(movesAndMem, readings, touristsAndMe, edges, matrices){
-  #print(movesAndMem)
-  print("New Turn")
-  
-  #if tourist was eaten
-  if(any(na.omit(touristsAndMe[1:2]) <0 )){
-    cat("Tourist got eaten")
-    negNode = touristsAndMe[which(na.omit(touristsAndMe[1:2])<0) ]
-    print(negNode)
-    negNode = negNode * -1
-    cat("Tourist got eaten at", negNode, "\n")
-    Fprev <- matrix(0,ncol = 40)
-    Fprev[negNode]=1
-    print(Fprev)
+makeMoves <- function(movesAndMem, readings, touristsAndMe, edges, matrices){
+  rangerNode = touristsAndMe[3]
+  #check if there's a movement vector stored
+  if(movesAndMem$mem$status == 0){
+    
+    print("This works")
+  }
+  if(movesAndMem$mem$status == 1){
+    
+    print("This too works")
   }
   
-  #check if there's a movement vector stored
   if(is.null(movesAndMem$mem$transMatrix)){
     tmatrix <-transitionMatrix(1, edges)
     movesAndMem$mem$transMatrix <-tmatrix
   }else{
     tmatrix <- movesAndMem$mem$transMatrix
   }
-  
+  #check if there's a transition matrix already stored
   if(is.null(movesAndMem$mem$Fprev)){
     movesAndMem$status = 0
-    Fprev <-matrix(1/40,ncol = 40)
+    Fprev <-matrix(1/39,ncol = 40)
+    Fprev[rangerNode] = 0
   }else{
     Fprev <-movesAndMem$mem$Fprev
   }
   
+  
+  
+  if(any(na.omit(touristsAndMe[1:2]) < 0 )){
+    #cat("Tourist got eaten \n")
+    negNode = touristsAndMe[which(touristsAndMe[1:2]<0)]
+    negNode = negNode * -1
+    Fprev <- matrix(0,ncol = 40)
+    Fprev[negNode]=1
+
+  }
+  #print("Tourist not eaten")
+  #If tourists not eaten then put those locations to 0
+  if( !is.na(touristsAndMe[1]) ){
+    Fprev[touristsAndMe[1]] = 0
+    Fprev <- Fprev/sum(Fprev)
+  }
+  
+  if( !is.na(touristsAndMe[2]) ){
+    Fprev[touristsAndMe[2]] = 0
+    Fprev = Fprev/sum(Fprev)
+  }
 
   
   salinityColumn =  apply(matrices$salinity, 1, function(row) dnorm(readings[1],row[1], row[2]) )
-  phosphateColumn = apply(matrices$phosphate,1, function(row) dnorm(readings[2],row[1], row[2]) )
+  phosphateColumn = apply(matrices$phosphate, 1, function(row) dnorm(readings[2],row[1], row[2]) )
   nitrogenColumn =   apply(matrices$nitrogen,  1, function(row) dnorm(readings[3],row[1], row[2]) )
-
+  
   probabilityColumn = cbind(salinityColumn,phosphateColumn,nitrogenColumn)
-  #print(probabilityColumn)
   probabilityColumn = apply(probabilityColumn, 1, function(x) prod(x[1],x[2],x[3]))
   Omatrix = diag(probabilityColumn)
-
-  #And here we get the vector with the probabilities at each node.
-  cat("Fprev", Fprev, "\n")
-  #previously had " * probabilityColumn" instead of %*% Omatrix
-  Fnew = Fprev %*% tmatrix %*% Omatrix
-  movesAndMem$mem$Fprev <-Fnew/sum(Fnew)
-  cat("Fnew", Fnew, "\n")
+  
  
+  #print(Fprev)
+  Fnew = Fprev %*% tmatrix %*% Omatrix
+  Fnew = Fnew/sum(Fnew)
+  #print(Fnew)
   
-
   probCrocLocation = which.max(Fnew)
-  print(probCrocLocation)
-  
-  routeToCroc=shortestPath(touristsAndMe[3],probCrocLocation,edges)
-  print(routeToCroc)
-  
-  #add the necessary things to control the movement. (remember to fix gitignore before continuing)
-  nextStep1 = routeToCroc[1]
-  nextStep2 = routeToCroc[2]
 
-  #add logic to either move or search the waterhole
-  #I'm just checking my own fucking location here.
+  #print(probCrocLocation)
+  routeToCroc=shortestPath(touristsAndMe[3], probCrocLocation, edges)
+  #print(routeToCroc)
+  
+  #add the necessary things to control the movement.
+  #nextStep1 = routeToCroc[1]
+  nextStep2 = routeToCroc[2]
+  nextStep3 = routeToCroc[3]
+
+  #cat("Probable Croc location: ", probCrocLocation, "\n")
+  #cat("Current location: ", touristsAndMe[3], "\n")
+  # cat("First Step: ", nextStep2, "\n")
+  # cat("Second Step: ", nextStep3, "\n")
+  
   if(probCrocLocation == touristsAndMe[3]){
-    movesAndMem$moves <-c(0,0)
-    cat("Check Waterhole", movesAndMem$moves, "\n")
-  }else if(nextStep2 == probCrocLocation){
-    movesAndMem$moves <-c(nextStep1,0)
-    cat("Move to ", nextStep1, " and check waterhole\n")
+    #print("Same waterhole as crocodile, check here")
+    #print(touristsAndMe[3])
+    movesAndMem$moves <-c(touristsAndMe[3],0)
+    Fnew[touristsAndMe[3]] = 0
+    Fnew = Fnew/sum(Fnew)
+    #print(Fnew)
+
+   }else if(nextStep2 == probCrocLocation){
+    movesAndMem$moves <-c(nextStep2,0)
+    Fnew[nextStep2] = 0
+    Fnew = Fnew/sum(Fnew)
+    #print(Fnew)
+    #cat("Move to ", nextStep2, " and check waterhole. \n")
   }else{
-    movesAndMem$moves <-c(nextStep1,nextStep2)
-    cat("Moves", movesAndMem$moves, "\n")
+    movesAndMem$moves <-c(nextStep2,nextStep3)
+    #cat("Move 2 steps: ", movesAndMem$moves, "\n")
   }
-  
-  
-  
-  
-  
-  
+  movesAndMem$mem$Fprev <- Fnew
   
   return(movesAndMem)
 }
-
-
-
 
 
 #the transiion matrix function
@@ -138,12 +155,9 @@ appendSorted = function (newNode,frontier){
           return(frontier)
         }
       }
-      
     }
-    
-    for (i in 1:length) {
-      if(frontier[[i]]$cost  >= newNode$cost)
-      {
+    for (i in 1:length){
+      if(frontier[[i]]$cost  >= newNode$cost){
         frontier = append(frontier,list(newNode), i-1);
         return(frontier)
       }
@@ -152,8 +166,6 @@ appendSorted = function (newNode,frontier){
   }
   return (frontier)
 }
-
-
 
 shortestPath = function(start,goal,edges){
   start_node = list(position=start, cost=0, path=start);
