@@ -11,54 +11,36 @@ library(WheresCroc)
 #MATRICES: contains the mean[1] and sd[2] of $salinity $phosphate and $nitrate
 makeMoves <- function(movesAndMem, readings, touristsAndMe, edges, matrices){
   rangerNode = touristsAndMe[3]
-  #check if there's a movement vector stored
-  if(movesAndMem$mem$status == 0){
-    
-    print("This works")
-  }
-  if(movesAndMem$mem$status == 1){
-    
-    print("This too works")
-  }
   
-  if(is.null(movesAndMem$mem$transMatrix)){
+  if(movesAndMem$mem$status == 0 | movesAndMem$mem$status == 1 ){
     tmatrix <-transitionMatrix(1, edges)
     movesAndMem$mem$transMatrix <-tmatrix
-  }else{
-    tmatrix <- movesAndMem$mem$transMatrix
-  }
-  #check if there's a transition matrix already stored
-  if(is.null(movesAndMem$mem$Fprev)){
-    movesAndMem$status = 0
     Fprev <-matrix(1/39,ncol = 40)
     Fprev[rangerNode] = 0
   }else{
-    Fprev <-movesAndMem$mem$Fprev
+    tmatrix <- movesAndMem$mem$transMatrix
+    Fprev<- movesAndMem$mem$Fprev
   }
-  
-  
-  
+
   if(any(na.omit(touristsAndMe[1:2]) < 0 )){
-    #cat("Tourist got eaten \n")
     negNode = touristsAndMe[which(touristsAndMe[1:2]<0)]
-    negNode = negNode * -1
+    deathHole = negNode * -1
     Fprev <- matrix(0,ncol = 40)
-    Fprev[negNode]=1
-
+    Fprev[deathHole]=1
+    #cat("Tourist got eaten at: ", deathHole,"\n")
+    
+  }else{
+    #If tourists not eaten then put those locations to 0
+    if( !is.na(touristsAndMe[1]) ){
+      Fprev[touristsAndMe[1]] = 0
+      Fprev <- Fprev/sum(Fprev)
+    }
+    if( !is.na(touristsAndMe[2]) ){
+      Fprev[touristsAndMe[2]] = 0
+      Fprev = Fprev/sum(Fprev)
+    }
   }
-  #print("Tourist not eaten")
-  #If tourists not eaten then put those locations to 0
-  if( !is.na(touristsAndMe[1]) ){
-    Fprev[touristsAndMe[1]] = 0
-    Fprev <- Fprev/sum(Fprev)
-  }
-  
-  if( !is.na(touristsAndMe[2]) ){
-    Fprev[touristsAndMe[2]] = 0
-    Fprev = Fprev/sum(Fprev)
-  }
-
-  
+ 
   salinityColumn =  apply(matrices$salinity, 1, function(row) dnorm(readings[1],row[1], row[2]) )
   phosphateColumn = apply(matrices$phosphate, 1, function(row) dnorm(readings[2],row[1], row[2]) )
   nitrogenColumn =   apply(matrices$nitrogen,  1, function(row) dnorm(readings[3],row[1], row[2]) )
@@ -67,51 +49,48 @@ makeMoves <- function(movesAndMem, readings, touristsAndMe, edges, matrices){
   probabilityColumn = apply(probabilityColumn, 1, function(x) prod(x[1],x[2],x[3]))
   Omatrix = diag(probabilityColumn)
   
- 
-  #print(Fprev)
+
   Fnew = Fprev %*% tmatrix %*% Omatrix
   Fnew = Fnew/sum(Fnew)
-  #print(Fnew)
-  
+
   probCrocLocation = which.max(Fnew)
 
-  #print(probCrocLocation)
   routeToCroc=shortestPath(touristsAndMe[3], probCrocLocation, edges)
-  #print(routeToCroc)
-  
-  #add the necessary things to control the movement.
-  #nextStep1 = routeToCroc[1]
-  nextStep2 = routeToCroc[2]
-  nextStep3 = routeToCroc[3]
 
-  #cat("Probable Croc location: ", probCrocLocation, "\n")
-  #cat("Current location: ", touristsAndMe[3], "\n")
-  # cat("First Step: ", nextStep2, "\n")
-  # cat("Second Step: ", nextStep3, "\n")
-  
-  if(probCrocLocation == touristsAndMe[3]){
+  nextStep1 = routeToCroc[2]
+  nextStep2 = routeToCroc[3]
+
+  if(probCrocLocation == rangerNode){
     #print("Same waterhole as crocodile, check here")
-    #print(touristsAndMe[3])
-    movesAndMem$moves <-c(touristsAndMe[3],0)
-    Fnew[touristsAndMe[3]] = 0
+    movesAndMem$moves <-c(rangerNode,0)
+    Fnew[probCrocLocation] = 0
     Fnew = Fnew/sum(Fnew)
-    #print(Fnew)
-
-   }else if(nextStep2 == probCrocLocation){
-    movesAndMem$moves <-c(nextStep2,0)
-    Fnew[nextStep2] = 0
+ 
+   }else if(nextStep1 == probCrocLocation){
+    movesAndMem$moves <-c(nextStep1,0)
+    Fnew[nextStep1] = 0
     Fnew = Fnew/sum(Fnew)
-    #print(Fnew)
-    #cat("Move to ", nextStep2, " and check waterhole. \n")
+    #cat("Move to ", nextStep1, " and check waterhole. \n")
+    
   }else{
-    movesAndMem$moves <-c(nextStep2,nextStep3)
+    movesAndMem$moves <-c(nextStep1,nextStep2)
     #cat("Move 2 steps: ", movesAndMem$moves, "\n")
   }
-  movesAndMem$mem$Fprev <- Fnew
   
+  if(movesAndMem$mem$status == 0 | movesAndMem$mem$status ==1){
+     movesAndMem$mem$status = 2;  
+  }
+  movesAndMem$mem$Fprev <- Fnew
+  movesAndMem$mem$prevCrocLoc <- probCrocLocation
+
   return(movesAndMem)
 }
 
+isAdjacent <- function(current, old, edges){
+  
+  print(any(which((edges[,1] == current) & (edges[,2] == old))))
+  print(any(which((edges[,1] == old) & (edges[,2] == current))))
+}
 
 #the transiion matrix function
 transitionMatrix <-function (myPosition, edges){
@@ -120,11 +99,10 @@ transitionMatrix <-function (myPosition, edges){
   for(i in 1:40){
     neighbors = getNeighbors(i,edges)
     
-    #index[i,i] will remain with probability 0. Keep in mind for later.
     theMatrix[i,] = 0
-    #no need fpr loops 
+    #no need for loops 
     #divide by the amount of neighbors plus itself since there's a possibility of no movement
-    theMatrix[i,neighbors] = 1/(length(neighbors)+1)
+    theMatrix[i,c(neighbors,i)] = 1/(length(neighbors)+1)
     
   }
   return(theMatrix)
